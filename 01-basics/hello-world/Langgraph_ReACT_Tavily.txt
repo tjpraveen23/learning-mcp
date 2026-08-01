@@ -1,0 +1,47 @@
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
+from langchain.agents import tool
+from langchain_community.tools.tavily_search import TavilySearchResults
+
+# ---- Define Tools ----
+tavily_search = TavilySearchResults(max_results=2)
+
+@tool
+def get_weather(location: str, date: str = "today") -> str:
+    """Fetches live weather information using Tavily search."""
+    query = f"Weather in {location} {date}"
+    results = tavily_search.invoke({"query": query})
+    if results and "content" in results[0]:
+        return results[0]["content"]
+    return f"Could not find weather info for {location} on {date}"
+
+@tool
+def recommend_clothes(weather: str) -> str:
+    """Recommends clothes based on weather description."""
+    weather = weather.lower()
+    if "hot" in weather or "humid" in weather or "sunny" in weather:
+        return "Wear light cotton clothes, sunglasses, and stay hydrated."
+    elif "rain" in weather or "shower" in weather or "thunderstorm" in weather:
+        return "Carry an umbrella or raincoat, and wear waterproof shoes."
+    elif "cold" in weather or "chilly" in weather or "winter" in weather:
+        return "Wear warm clothes like a jacket or sweater."
+    elif "cloudy" in weather or "moderate" in weather:
+        return "Casual comfortable clothes should be fine, maybe carry a light jacket."
+    else:
+        return "Dress comfortably and check for sudden changes in weather."
+
+# ---- Setup LLM ----
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# ---- Create ReAct Agent ----
+tools = [get_weather, recommend_clothes]
+agent = create_react_agent(llm, tools)
+
+# ---- Run Agent ----
+inputs = {"messages": [("user", "I am traveling to Bangalore tomorrow, what should I wear?")]}
+output = agent.invoke(inputs)
+
+# ---- Print FULL ReAct Reasoning Trace ----
+print("\n--- ReAct Trace ---\n")
+for msg in output["messages"]:
+    print(f"{msg['role'].upper()}: {msg['content']}")
